@@ -26,3 +26,8 @@ Three individual models to estimate the number of marbles from timeseries. One m
 based on novelty detection which I do per sensor modality.
 
 <img src="images/mlp.svg" alt="the ml model" width="800"/>
+
+## How to run
+
+You won't be able to run this without the data and I did not upload it yet because I need to figure out if I am allowed to share the data. However, the code is here for reference and a starting point to adapt the
+project is the script regression_ft_sound_vision.py
