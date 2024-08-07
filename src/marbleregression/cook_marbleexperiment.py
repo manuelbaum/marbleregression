@@ -1,13 +1,10 @@
-
 import numpy as np
-
 import torch
 import argparse
 import pickle
 from scipy import signal
 import pandas as pd
-
-
+from marbleregression.load_data_marbleexperiment import load_data
 
 def quaternion_from_rotation_matrix(Q):
     # https://en.wikipedia.org/wiki/Rotation_matrix#Quaternion
@@ -21,7 +18,13 @@ def quaternion_from_rotation_matrix(Q):
 
     return torch.tensor([w,x,y,z])
 
+
 def lin_rot_from_htransform(H):
+    """
+
+    :param H:
+    :return:
+    """
     lin = H[:3,3]
     rot = quaternion_from_rotation_matrix(H[:3,:3])
     return torch.cat([lin, rot])
@@ -47,23 +50,22 @@ def collate_fn_padd(batch):
 
 
 def cook_data(data):
+    """
+    cooks the raw data to be in an ml-friendly format
+    :param data: a dictionary created by load_data in load_data_marbleexperiment.py
+    :return: a tuple (identifiers, ys, xs_ft, xs_sound, xs_vision), where identifiers is a list of strings that name datapoints, and the rest are torch tensors with labels and input data
+    """
 
     identifiers = [d['identifier'] for d in data]
     ys = np.expand_dims(np.array([float(d["marbles"]) for d in data]),1)
-
 
     # modality-wise massaging the data into the feature form we want
 
     fts = [d["ft"] for d in data]
     visions = [d["vision"] for d in data]
-    # sound_spectra = [signal.welch(d["sound_samples"], d["sound_samplerate"], nperseg=64, nfft=256)[1] for d in data]
-    # sound_spectograms_alloutputs = [signal.spectrogram(d["sound_samples"], d["sound_samplerate"], nperseg=64,nfft=256) for d in data]
     sound_spectograms_alloutputs = [signal.spectrogram(d["sound_samples"], d["sound_samplerate"], nperseg=256,nfft=256) for d in data]
     sound_spectograms = [d[2].transpose() for d in sound_spectograms_alloutputs]
     sound_times = [d[1] for d in sound_spectograms_alloutputs]
-
-    #sound_times = np.array(sound_times)
-
 
     ### align time-series by making them pandas dataframes and interpolating based on timestamps (using sound timestamps
     ### as the master timestamp)
@@ -72,23 +74,17 @@ def cook_data(data):
     xs_vision =[]
     print("Flattening images from shape",visions[0].shape)
 
-    cutoff = 30
-
+    # loop over all timeseries, align their timestamps and subsample to have data at the same points in time
     for i_data in range(len(data)):
-
 
         df_sound = pd.DataFrame(data=sound_spectograms[i_data], index = sound_times[i_data])
         df_ft = pd.DataFrame(data=fts[i_data], index = data[i_data]["ft_timestamps"])
 
         vision_timestamps = data[i_data]["vision_timestamps"]
 
-        #vision_flat = np.reshape(visions[i_data], (-1, 120*160*3))
         vision = visions[i_data]
         vision = vision[::2]
         ts_vision = vision_timestamps[::2]
-        # df_vision = pd.DataFrame(data=vision_flat[::2], index = vision_timestamps[::2])
-
-        # ts_vision = df_vision.index
 
         ts_ft = df_ft.index
         df_ft = df_ft.reindex(list(ts_vision) + ts_ft.to_list()).sort_index()
@@ -103,46 +99,11 @@ def cook_data(data):
         df_sound = df_sound.reindex(ts_vision).sort_index()
 
         df_ft = df_ft.fillna(0.)
-        #df_vision = df_vision.fillna(0.)
         df_sound = df_sound.fillna(0.)
 
         xs_sound.append(df_sound.to_numpy())
         xs_ft.append(df_ft.to_numpy())
-        # xs_vision.append(df_vision.to_numpy())
         xs_vision.append(vision)
-
-    # xs_sound = df_sound.to_numpy()
-    # xs_ft = df_ft.to_numpy()
-    # xs_poses = df_poses.to_numpy()
-
-    # df_ee_position = trial['data']['/ee/position']
-    # ts_ee_position = df_ee_position.index
-    # df_ee_position = df_ee_position.reindex(ts + ts_ee_position).sort_index()
-    # df_ee_position = df_ee_position.interpolate()
-    # df_ee_position = df_ee_position.reindex(ts).sort_index()
-
-
-
-
-    # sample_rate, samples = d["sample_rate"], d["samples"]
-    # frequencies, times, spectrogram = signal.spectrogram(samples, sample_rate, nperseg=64,
-    #                                                      nfft=256)  # , noverlap=60)
-    # f, pxx = signal.welch(samples, sample_rate, nperseg=64, nfft=256)  # , noverlap=60) # spectrum
-    # i_class = classnames.index(d["class"])
-    # ys.append(i_class)
-    # speeds.append(float(d["speed"]))
-    # xs.append(pxx)
-
-
-
-
-
-
-
-    # pad data for lstm on time-series with different lengths
-    # xs_ft = collate_fn_padd(fts)
-    # xs_sound = collate_fn_padd(sound_spectograms)
-    # xs_pose = collate_fn_padd(poses)
 
     xs_ft = collate_fn_padd(xs_ft)
     xs_sound = collate_fn_padd(xs_sound)

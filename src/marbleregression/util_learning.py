@@ -8,9 +8,7 @@ import marbleregression.cook_marbleexperiment as cook_regression
 from multiprocessing import cpu_count
 from torch.nn import functional as F
 import torchvision.io
-##################################################################
-# from here: https://www.kaggle.com/code/purplejester/a-simple-lstm-based-time-series-classifier
-##################################################################
+
 
 class MyDataset(torch.utils.data.Dataset):
     def __init__(self, filelist, is_vision=False):
